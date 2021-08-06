@@ -367,6 +367,12 @@ PlatformRegisterBootOption (
            );
   ASSERT_EFI_ERROR (Status);
 
+  //
+  // Connect all devices, and regenerate all boot options
+  //
+  EfiBootManagerConnectAll ();
+  EfiBootManagerRefreshAllBootOption ();
+  
   BootOptions = EfiBootManagerGetLoadOptions (&BootOptionCount, LoadOptionTypeBoot);
 
   OptionIndex = EfiBootManagerFindLoadOption (&NewOption, BootOptions, BootOptionCount);
@@ -811,20 +817,24 @@ PlatformBootManagerUnableToBoot (
   //
   // Record the updated number of boot configured boot options
   //
-  BootOptions = EfiBootManagerGetLoadOptions (&NewBootOptionCount,
-                  LoadOptionTypeBoot);
+  BootOptions = EfiBootManagerGetLoadOptions (&NewBootOptionCount, LoadOptionTypeBoot);
   EfiBootManagerFreeLoadOptions (BootOptions, NewBootOptionCount);
 
   //
   // If the number of configured boot options has changed, reboot
   // the system so the new boot options will be taken into account
   // while executing the ordinary BDS bootflow sequence.
-  //
-  if (NewBootOptionCount != OldBootOptionCount) {
-    DEBUG ((DEBUG_WARN, "%a: rebooting after refreshing all boot options\n",
-      __FUNCTION__));
-    gRT->ResetSystem (EfiResetCold, EFI_SUCCESS, 0, NULL);
-  }
+  //    
+  for (Index=0; Index < NewBootOptionCount; Index++) { 
+    if (BootOptions[Index].FilePath->Type == MESSAGING_DEVICE_PATH && 
+        BootOptions[Index].FilePath->SubType == MSG_MAC_ADDR_DP) {
+      DEBUG ((DEBUG_WARN, "%a: trying to boot option %i\n", __FUNCTION__, Index)); 
+      EfiBootManagerBoot (&BootOptions[Index]); 
+      break; 
+    } 
+  } 
+  EfiBootManagerFreeLoadOptions (BootOptions, NewBootOptionCount); 
+  return;
 
   //
   // BootManagerMenu doesn't contain the correct information when return status
